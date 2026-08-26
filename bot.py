@@ -6,8 +6,10 @@ import json
 import logging
 import os
 import random
+import threading
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from telegram import Update
 from telegram.ext import (
@@ -19,6 +21,28 @@ from telegram.ext import (
 )
 
 from config import TELEGRAM_TOKEN, GEMINI_API_KEY, BOT_NAME, SYSTEM_PROMPT
+
+
+# ─── Веб-сервер для Railway (чтобы не засыпал) ────────────────
+class HealthHandler(BaseHTTPRequestHandler):
+    """Обработчик health check запросов от UptimeRobot."""
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"OK - Sova is alive!")
+
+    def log_message(self, format, *args):
+        # Отключаем логи health check чтобы не засорять
+        pass
+
+
+def start_web_server():
+    """Запускает простой веб-сервер на порту 8080."""
+    port = int(os.getenv("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    logger.info("🌐 Веб-сервер запущен на порту %d", port)
+    server.serve_forever()
 
 # ─── Логирование ─────────────────────────────────────────────
 logging.basicConfig(
@@ -396,6 +420,10 @@ def main() -> None:
             "Создай бота через @BotFather и добавь токен в .env файл:\n"
             "  TELEGRAM_TOKEN=твой_токен"
         )
+
+    # Запускаем веб-сервер в отдельном потоке (для Railway/UptimeRobot)
+    web_thread = threading.Thread(target=start_web_server, daemon=True)
+    web_thread.start()
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
