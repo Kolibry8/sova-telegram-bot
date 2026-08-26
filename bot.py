@@ -363,9 +363,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         # Определяем, обращаются ли к боту
         bot_username = context.bot.username
+        text_lower = text.lower()
+
+        # Проверяем разные варианты обращения к боту
         is_mentioned = (
-            f"@{bot_username}" in text
-            or BOT_NAME.lower() in text.lower()
+            f"@{bot_username}" in text  # @имя_бота
+            or "совa" in text_lower  # сова (с любой буквой а/я)
+            or "сова" in text_lower  # сова
+            or "сову" in text_lower  # сову (винительный падеж)
+            or "совой" in text_lower  # совой (творительный падеж)
+            or "сове" in text_lower  # сове (дательный падеж)
+            or "совы" in text_lower  # совы (родительный падеж)
             or (message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id)
         )
 
@@ -375,7 +383,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if message.chat.type in ("group", "supergroup") and not is_mentioned:
             return
 
-        logger.info("Сообщение от %s в чате %s: %s", sender_name, chat_id, text[:80])
+        logger.info("Сообщение от %s (ID: %s) в чате %s: %s", sender_name, sender.id, chat_id, text[:80])
 
         # Пробуем Gemini
         ai_response = await ask_ai(text, chat_histories[chat_id], sender_name)
