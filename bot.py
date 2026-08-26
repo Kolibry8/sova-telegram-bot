@@ -377,34 +377,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             or (message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id)
         )
 
+        # ─── СОХРАНЯЕМ ВСЕ сообщения в историю ВСЕГДА ───
+        # (чтобы бот помнил чат, даже когда не отвечает)
+        chat_histories[chat_id].append({
+            "role": "user",
+            "content": f"[{sender_name}]: {text}",
+        })
+        # Ограничиваем длину истории
+        if len(chat_histories[chat_id]) > HISTORY_LEN:
+            chat_histories[chat_id] = chat_histories[chat_id][-HISTORY_LEN:]
+        # Сохраняем в файл
+        save_history(chat_id, chat_histories[chat_id])
+
+        logger.info("Сообщение от %s (ID: %s) в чате %s: %s", sender_name, sender.id, chat_id, text[:80])
+
         # В группе отвечаем только если:
         # 1. Бота упомянули / ответили на его сообщение
         # 2. Это ответ на сообщение бота (чтобы поддерживать диалог)
         if message.chat.type in ("group", "supergroup") and not is_mentioned:
             return
 
-        logger.info("Сообщение от %s (ID: %s) в чате %s: %s", sender_name, sender.id, chat_id, text[:80])
-
-        # Пробуем Gemini
+        # Пробуем Gemini (только если бота упомянули)
         ai_response = await ask_ai(text, chat_histories[chat_id], sender_name)
 
-        # Если Gemini ответил — отправляем и сохраняем в историю
         if ai_response:
-            chat_histories[chat_id].append({
-                "role": "user",
-                "content": f"[{sender_name}]: {text}",
-            })
             chat_histories[chat_id].append({
                 "role": "assistant",
                 "content": ai_response,
             })
-            # Ограничиваем длину истории
-            if len(chat_histories[chat_id]) > HISTORY_LEN:
-                chat_histories[chat_id] = chat_histories[chat_id][-HISTORY_LEN:]
-
-            # Сохраняем в файл
             save_history(chat_id, chat_histories[chat_id])
-
             await message.reply_text(ai_response)
         else:
             logger.info("Gemini не ответил для %s — пропускаем", sender_name)
