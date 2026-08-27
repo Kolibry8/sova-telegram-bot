@@ -59,6 +59,9 @@ os.makedirs(HISTORY_DIR, exist_ok=True)
 
 chat_histories: dict[int, list[dict]] = defaultdict(list)
 
+# Множество приветствий за сегодня (чтобы не приветствовать дважды)
+greeted_users: set[str] = set()
+
 
 def _history_path(chat_id: int) -> str:
     """Путь к файлу истории чата."""
@@ -415,6 +418,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         save_history(chat_id, chat_histories[chat_id])
 
         logger.info("Сообщение от %s (ID: %s) в чате %s: %s", sender_name, sender.id, chat_id, text[:80])
+
+        # ─── Приветствие для Ольги @volha_boksha ───
+        if sender.username and sender.username.lower() == "volha_boksha":
+            # Проверяем, не приветствовали ли мы её уже в этом чате сегодня
+            today = datetime.now(MOSCOW_TZ).strftime("%Y-%m-%d")
+            greet_key = f"volha_{chat_id}_{today}"
+            if greet_key not in greeted_users:
+                greeted_users.add(greet_key)
+                greetings = [
+                    "Ольга! 🌸 Наша дорогая гостья! Как здорово, что ты к нам заглянула! Ламповых посиделок тебе и душевного тепла! ✨🦉",
+                    "Ольга! 💫 Это же наша чудесная Ольга! Рада тебя видеть! Пусть сегодня будет день наполнен балансом и гармонией! 🌸🦉",
+                    "Оля! 🌺 Наша звезда! Ты нам очень нужна! Добро пожаловать в наш уютный уголок! ✨🦉",
+                ]
+                await message.reply_text(random.choice(greetings))
+                logger.info("Приветствие отправлено для Ольги (volha_boksha)")
 
         # В группе отвечаем только если:
         # 1. Бота упомянули / ответили на его сообщение
