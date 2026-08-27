@@ -420,6 +420,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # 1. Бота упомянули / ответили на его сообщение
         # 2. Это ответ на сообщение бота (чтобы поддерживать диалог)
         if message.chat.type in ("group", "supergroup") and not is_mentioned:
+            logger.debug("Сообщение от %s проигнорировано (нет упоминания бота)", sender_name)
             return
 
         # Пробуем Gemini (только если бота упомянули)
@@ -432,8 +433,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             })
             save_history(chat_id, chat_histories[chat_id])
             await message.reply_text(ai_response)
+            logger.info("Ответ отправлен для %s: %s", sender_name, ai_response[:50])
         else:
-            logger.info("Gemini не ответил для %s — пропускаем", sender_name)
+            logger.warning("Gemini не ответил для %s (ID: %s) — возможно ошибка API", sender_name, sender.id)
 
     except Exception as e:
         logger.error("Критическая ошибка в handle_message: %s", e, exc_info=True)
