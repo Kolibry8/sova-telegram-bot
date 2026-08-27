@@ -106,8 +106,8 @@ def _load_all_histories() -> None:
 _load_all_histories()
 
 # ─── Зеркальное время (петарды!) ──────────────────────────────
-# Время последней "петарды" по каждой группе
-last_firework_time: dict[int, str] = {}  # chat_id -> "YYYY-MM-DD"
+# Сколько петард отправлено сегодня в каждом чате
+firework_count_today: dict[int, dict] = {}  # chat_id -> {"date": "YYYY-MM-DD", "count": 3, "times": ["01:10", "02:20"]}
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
@@ -134,34 +134,59 @@ def is_mirror_time() -> bool:
     return time_str == time_str[::-1]
 
 
-def already_sent_today(chat_id: int) -> bool:
-    """Проверяем, отправляли ли уже петарду сегодня в этот чат."""
+def get_firework_count_today(chat_id: int) -> int:
+    """Получаем количество петард, отправленных сегодня в этот чат."""
     now = datetime.now(MOSCOW_TZ)
     today = now.strftime("%Y-%m-%d")
-    return last_firework_time.get(chat_id) == today
+    data = firework_count_today.get(chat_id)
+    if data and data.get("date") == today:
+        return data.get("count", 0)
+    return 0
+
+
+def already_sent_at_this_time(chat_id: int, time_str: str) -> bool:
+    """Проверяем, отправляли ли уже петарду в это конкретное время сегодня."""
+    now = datetime.now(MOSCOW_TZ)
+    today = now.strftime("%Y-%m-%d")
+    data = firework_count_today.get(chat_id)
+    if data and data.get("date") == today:
+        return time_str in data.get("times", [])
+    return False
 
 
 async def maybe_send_firework(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
-    """Отправляет петарду в зеркальное время (с вероятностью ~30%)."""
+    """Отправляет петарду в зеркальное время (до 3 раз в день)."""
     if not is_mirror_time():
         return
 
-    if already_sent_today(chat_id):
-        return
-
-    # 30% шанс отправить петарду в зеркальное время
-    if random.random() > 0.3:
-        return
-
     now = datetime.now(MOSCOW_TZ)
+    today = now.strftime("%Y-%m-%d")
     time_str = f"{now.hour:02d}:{now.minute:02d}"
+
+    # Проверяем, не отправляли ли уже в это время
+    if already_sent_at_this_time(chat_id, time_str):
+        return
+
+    # Проверяем, не превышен ли лимит (3 раза в день)
+    count = get_firework_count_today(chat_id)
+    if count >= 3:
+        return
+
+    # 40% шанс отправить петарду в зеркальное время
+    if random.random() > 0.4:
+        return
 
     message = f"🎆🔥 {random.choice(FIREWORK_MESSAGES)} ({time_str} МСК)"
     await context.bot.send_message(chat_id=chat_id, text=message)
 
-    # Запоминаем, что отправили сегодня
-    last_firework_time[chat_id] = now.strftime("%Y-%m-%d")
-    logger.info("Петарда отправлена в чат %s в %s МСК", chat_id, time_str)
+    # Обновляем счётчик
+    if chat_id not in firework_count_today or firework_count_today[chat_id].get("date") != today:
+        firework_count_today[chat_id] = {"date": today, "count": 1, "times": [time_str]}
+    else:
+        firework_count_today[chat_id]["count"] += 1
+        firework_count_today[chat_id]["times"].append(time_str)
+
+    logger.info("Петарда #%d отправлена в чат %s в %s МСК", firework_count_today[chat_id]["count"], chat_id, time_str)
 
 # ─── Шаблоны ответов (fallback без OpenAI) ───────────────────
 FRIENDLY_RESPONSES = {
