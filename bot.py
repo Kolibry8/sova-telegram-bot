@@ -266,9 +266,9 @@ async def ask_ai(user_message: str, history: list[dict], sender_name: str) -> st
         weekday_names = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
         weekday = weekday_names[now.weekday()]
 
-        # Формируем историю для Gemini (ограничиваем до 10 сообщений для скорости)
+        # Формируем историю для Gemini (последние 40 сообщений для контекста)
         gemini_history = []
-        for msg in history[-10:]:
+        for msg in history[-40:]:
             role = "user" if msg["role"] == "user" else "model"
             gemini_history.append({"role": role, "parts": [msg["content"]]})
 
