@@ -111,19 +111,23 @@ _load_all_histories()
 # ─── Зеркальное время (петарды!) ──────────────────────────────
 # Сколько петард отправлено сегодня в каждом чате
 firework_count_today: dict[int, dict] = {}  # chat_id -> {"date": "YYYY-MM-DD", "count": 3, "times": ["01:10", "02:20"]}
+# Лог петард за сегодня: chat_id -> [{"time": "01:10", "message": "...", "sender": "Сова"}]
+firework_log_today: dict[int, list] = {}
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
-# Варианты сообщений для зеркального времени
+# Варианты сообщений для зеркального времени с пожеланиями
 FIREWORK_MESSAGES = [
-    "Петарда в зеркальное время! 🎆🔥",
-    "Зеркальное время! Пусть будет ярко! 🎇✨",
-    "Огоньки! 🔥🔥🔥",
-    "Петарды полетели! 🎆💫",
-    "Зеркальчик! Пусть искры летят! ✨🎇",
-    "Ракета в зеркальное время! 🚀🎆",
-    "Бум! Зеркальное время! 💥🎆",
-    "Искры! 🔥✨ Петарда!",
+    "🎆🔥 Зеркальное время! Пусть этот момент принесёт тебе радость и вдохновение! ✨",
+    "🎇✨ Огоньки в зеркальное время! Желаю тебе лёгкости и гармонии во всём! 💫",
+    "🔥🔥🔥 Зеркальчик! Пусть всё задуманное сбудется! 🎆",
+    "🎆💫 Петарды полетели! Желаю здоровья, любви и удачи! ✨",
+    "✨🎇 Зеркальное время! Пусть каждый день приносит маленькие чудеса! 🎆",
+    "🚀🎆 Ракета в зеркальное время! Желаю веры в себя и своих сил! 💥",
+    "💥🎆 Бум! Зеркальное время! Пусть будет вкусное печенье и хорошее настроение! 🍪✨",
+    "🔥✨ Искры летят! Желаю тебе тепла, добра и уютного вечера! 🦉💫",
+    "🎇🔥 Зеркальное время! Пусть всё получится и будет здорово! 🎉✨",
+    "✨🎆 Огоньки! Желаю тебе ярких моментов и тёплых встреч! 💖",
 ]
 
 
@@ -179,7 +183,8 @@ async def maybe_send_firework(context: ContextTypes.DEFAULT_TYPE, chat_id: int) 
     if random.random() > 0.4:
         return
 
-    message = f"🎆🔥 {random.choice(FIREWORK_MESSAGES)} ({time_str} МСК)"
+    wish = random.choice(FIREWORK_MESSAGES)
+    message = f"{wish} ({time_str} МСК)"
     await context.bot.send_message(chat_id=chat_id, text=message)
 
     # Обновляем счётчик
@@ -188,6 +193,11 @@ async def maybe_send_firework(context: ContextTypes.DEFAULT_TYPE, chat_id: int) 
     else:
         firework_count_today[chat_id]["count"] += 1
         firework_count_today[chat_id]["times"].append(time_str)
+
+    # Логируем петарду
+    if chat_id not in firework_log_today or firework_log_today[chat_id][0].get("date") != today:
+        firework_log_today[chat_id] = [{"date": today}]
+    firework_log_today[chat_id].append({"time": time_str, "message": wish, "sender": "Сова"})
 
     logger.info("Петарда #%d отправлена в чат %s в %s МСК", firework_count_today[chat_id]["count"], chat_id, time_str)
 
