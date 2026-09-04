@@ -304,9 +304,9 @@ async def ask_ai(user_message: str, history: list[dict], sender_name: str) -> st
         weekday_names = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
         weekday = weekday_names[now.weekday()]
 
-        # Формируем историю для Gemini (последние 40 сообщений для контекста)
+        # Формируем историю для Gemini (последние 20 сообщений для скорости)
         gemini_history = []
-        for msg in history[-40:]:
+        for msg in history[-20:]:
             role = "user" if msg["role"] == "user" else "model"
             gemini_history.append({"role": role, "parts": [msg["content"]]})
 
@@ -315,18 +315,18 @@ async def ask_ai(user_message: str, history: list[dict], sender_name: str) -> st
         # Добавляем информацию о текущем времени к сообщению
         full_message = f"[Сейчас: {weekday}, {date_str}, {time_str} МСК] [{sender_name}]: {user_message}"
 
-        # Запускаем с таймаутом 20 секунд
+        # Запускаем с таймаутом 45 секунд
         loop = asyncio.get_event_loop()
         response = await asyncio.wait_for(
             loop.run_in_executor(
                 None,
                 lambda: chat.send_message(full_message)
             ),
-            timeout=20  # 20 секунд максимум
+            timeout=45  # 45 секунд максимум
         )
         return response.text.strip()
     except asyncio.TimeoutError:
-        logger.warning("Gemini: таймаут (15 сек) для сообщения от %s", sender_name)
+        logger.warning("Gemini: таймаут (45 сек) для сообщения от %s", sender_name)
         return None
     except Exception as e:
         logger.warning("Gemini ошибка: %s", e)
