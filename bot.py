@@ -56,6 +56,8 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+# httpx пишет в лог каждый запрос вместе с токеном бота — скрываем
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ─── Постоянное хранилище истории ─────────────────────────────
 HISTORY_DIR = os.path.join(os.path.dirname(__file__), "chat_history")
