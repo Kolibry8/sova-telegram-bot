@@ -8,8 +8,8 @@
 - 🦉 Отвечает тепло и дружелюбно
 - 💜 Утешает, когда грустно
 - 🎉 Радуется, когда весело
-- 🤖 Использует OpenAI (GPT-4o-mini) для умных ответов (опционально)
-- 📝 Без OpenAI работает на встроенных шаблонах
+- 🤖 Использует Google Gemini для умных ответов (бесплатный тариф)
+- 📝 Если Gemini недоступен — отвечает встроенными шаблонами
 
 ## Быстрый старт
 
@@ -34,9 +34,10 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Добавь токен в `.env`:
+Добавь токены в `.env`:
 ```
 TELEGRAM_TOKEN=твой_токен_от_BotFather
+GEMINI_API_KEY=ключ_с_aistudio.google.com/apikey
 ```
 
 ### 4. Запусти бота
@@ -57,16 +58,6 @@ python bot.py
 2. Вставить `TELEGRAM_TOKEN` и `GEMINI_API_KEY`
 3. В [UptimeRobot](https://uptimerobot.com) добавить проверку адреса сервиса каждые 5 минут — иначе бесплатный Render усыпит бота
 
-## С OpenAI (умные ответы)
-
-Если хочешь, чтобы бот отвечал более живо и разнообразно:
-
-1. Получи API ключ на [platform.openai.com](https://platform.openai.com)
-2. Добавь в `.env`:
-   ```
-   OPENAI_API_KEY=sk-...
-   ```
-
 ## Настройка характера бота
 
 Измени `SYSTEM_PROMPT` в `.env` или `config.py`, чтобы задать свой характер:
@@ -82,4 +73,5 @@ bot.py          — основной файл бота
 config.py       — конфигурация и промпт
 .env.example    — пример переменных окружения
 requirements.txt — зависимости
+render.yaml     — настройки хостинга Render
 ```

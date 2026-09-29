@@ -2,6 +2,7 @@
 Сова — добрый помощник Telegram-группы 🦉
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -234,7 +235,7 @@ FRIENDLY_RESPONSES = {
     "comfort": [
         "Не переживай, всё наладится! 🦉💜",
         "Совушка рядом, не волнуйся! Мы справимся! 💪",
-        "Бывает tough, но ты сильнее, чем думаешь! 🌟",
+        "Бывает тяжко, но ты сильнее, чем думаешь! 🌟",
     ],
     "default": [
         "Интересно! Расскажи больше? 🦉",
@@ -262,7 +263,7 @@ def get_fallback_response(text: str) -> str:
         return random.choice(FRIENDLY_RESPONSES["how_are_you"])
 
     # Позитив
-    if any(w in text_lower for w in ("ура", "класс", "супер", "отлично", "круто", "здорово", "յay")):
+    if any(w in text_lower for w in ("ура", "класс", "супер", "отлично", "круто", "здорово", "yay")):
         return random.choice(FRIENDLY_RESPONSES["positive"])
 
     # Утешение
@@ -277,20 +278,18 @@ def get_fallback_response(text: str) -> str:
 
 # ─── Google Gemini (бесплатный тариф!) ───────────────────────
 
-# Кэш для модели (создаём один раз)
-_gemini_model = None
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 
-def _get_gemini_model():
-    """Получить или создать модель Gemini (с кэшированием)."""
-    global _gemini_model
-    if _gemini_model is None and GEMINI_API_KEY:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        _gemini_model = genai.GenerativeModel(
-            model_name="gemini-3.5-flash-lite",
-            system_instruction=SYSTEM_PROMPT,
-        )
-    return _gemini_model
+# Кэш для клиента (создаём один раз)
+_gemini_client = None
+
+def _get_gemini_client():
+    """Получить или создать клиент Gemini (с кэшированием)."""
+    global _gemini_client
+    if _gemini_client is None and GEMINI_API_KEY:
+        from google import genai
+        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    return _gemini_client
 
 
 async def ask_ai(user_message: str, history: list[dict], sender_name: str) -> str | None:
@@ -299,10 +298,10 @@ async def ask_ai(user_message: str, history: list[dict], sender_name: str) -> st
         return None
 
     try:
-        import asyncio
+        from google.genai import types
 
-        model = _get_gemini_model()
-        if model is None:
+        client = _get_gemini_client()
+        if client is None:
             return None
 
         # Текущая дата и время по МСК
@@ -313,25 +312,34 @@ async def ask_ai(user_message: str, history: list[dict], sender_name: str) -> st
         weekday = weekday_names[now.weekday()]
 
         # Формируем историю для Gemini (последние 20 сообщений для скорости)
-        gemini_history = []
+        contents = []
         for msg in history[-20:]:
             role = "user" if msg["role"] == "user" else "model"
-            gemini_history.append({"role": role, "parts": [msg["content"]]})
-
-        chat = model.start_chat(history=gemini_history)
+            # Разговор для Gemini должен начинаться с реплики пользователя
+            if not contents and role == "model":
+                continue
+            contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
         # Добавляем информацию о текущем времени к сообщению
         full_message = f"[Сейчас: {weekday}, {date_str}, {time_str} МСК] [{sender_name}]: {user_message}"
+        contents.append({"role": "user", "parts": [{"text": full_message}]})
 
         # Запускаем с таймаутом 45 секунд
-        loop = asyncio.get_event_loop()
         response = await asyncio.wait_for(
-            loop.run_in_executor(
-                None,
-                lambda: chat.send_message(full_message)
+            client.aio.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    # Сова не вызывает функции — отключаем, чтобы не было лишних предупреждений
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                ),
             ),
             timeout=45  # 45 секунд максимум
         )
+        if not response.text:
+            logger.warning("Gemini вернул пустой ответ для %s", sender_name)
+            return None
         return response.text.strip()
     except asyncio.TimeoutError:
         logger.warning("Gemini: таймаут (45 сек) для сообщения от %s", sender_name)
@@ -471,7 +479,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await message.reply_text(ai_response)
             logger.info("Ответ отправлен для %s: %s", sender_name, ai_response[:50])
         else:
-            logger.warning("Gemini не ответил для %s (ID: %s) — возможно ошибка API", sender_name, sender.id)
+            logger.warning("Gemini не ответил для %s (ID: %s) — отвечаю шаблоном", sender_name, sender.id)
+            # Чтобы Сова не молчала, если нейросеть недоступна
+            await message.reply_text(get_fallback_response(text))
 
     except Exception as e:
         logger.error("Критическая ошибка в handle_message: %s", e, exc_info=True)
