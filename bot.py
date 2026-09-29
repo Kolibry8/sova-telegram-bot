@@ -23,7 +23,7 @@ from telegram.ext import (
 from config import TELEGRAM_TOKEN, GEMINI_API_KEY, BOT_NAME, SYSTEM_PROMPT
 
 
-# ─── Веб-сервер для Railway (чтобы не засыпал) ────────────────
+# ─── Веб-сервер для Render (чтобы не засыпал) ─────────────────
 class HealthHandler(BaseHTTPRequestHandler):
     """Обработчик health check запросов от UptimeRobot."""
     def do_GET(self):
@@ -31,6 +31,12 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(b"OK - Sova is alive!")
+
+    def do_HEAD(self):
+        # UptimeRobot (бесплатный) проверяет сайт HEAD-запросом
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
 
     def log_message(self, format, *args):
         # Отключаем логи health check чтобы не засорять

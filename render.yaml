@@ -1,0 +1,19 @@
+# Настройки для бесплатного хостинга Render (https://render.com)
+# Бесплатный сервис засыпает через 15 минут тишины,
+# поэтому UptimeRobot должен раз в 5 минут открывать его адрес.
+services:
+  - type: web
+    name: sova-telegram-bot
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
