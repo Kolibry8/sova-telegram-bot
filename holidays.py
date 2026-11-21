@@ -6,7 +6,7 @@
 
 Три группы (в порядке важности):
   main  — главные привычные славянам праздники
-  sky   — солнцестояния, равноденствия, «колесо года», метеорные потоки
+  sky   — солнцестояния, равноденствия, новолуния и полнолуния, «колесо года», метеорные потоки
   fun   — интересные и необычные праздники мира
 """
 
@@ -191,6 +191,87 @@ def _seasons(year: int) -> dict:
     return out
 
 
+# ─── Новолуния и полнолуния (формулы Ж. Мёса, гл. 49) ──────────
+def _phase_moment(k: float, full: bool) -> datetime:
+    """Момент новолуния (k — целое) или полнолуния (k — целое + 0.5) по Москве."""
+    t = k / 1236.85
+    jde = (2451550.09766 + 29.530588861 * k + 0.00015437 * t**2
+           - 0.000000150 * t**3 + 0.00000000073 * t**4)
+    e = 1 - 0.002516 * t - 0.0000074 * t**2
+    m = math.radians((2.5534 + 29.10535670 * k - 0.0000014 * t**2 - 0.00000011 * t**3) % 360)
+    mp = math.radians((201.5643 + 385.81693528 * k + 0.0107582 * t**2 + 0.00001238 * t**3 - 0.000000058 * t**4) % 360)
+    f = math.radians((160.7108 + 390.67050284 * k - 0.0016118 * t**2 - 0.00000227 * t**3 + 0.000000011 * t**4) % 360)
+    om = math.radians((124.7746 - 1.56375588 * k + 0.0020672 * t**2 + 0.00000215 * t**3) % 360)
+    s = math.sin
+    if full:
+        c = [-0.40614 * s(mp), 0.17302 * e * s(m), 0.01614 * s(2 * mp), 0.01043 * s(2 * f),
+             0.00734 * e * s(mp - m), -0.00515 * e * s(mp + m), 0.00209 * e * e * s(2 * m)]
+    else:
+        c = [-0.40720 * s(mp), 0.17241 * e * s(m), 0.01608 * s(2 * mp), 0.01039 * s(2 * f),
+             0.00739 * e * s(mp - m), -0.00514 * e * s(mp + m), 0.00208 * e * e * s(2 * m)]
+    corr = sum(c)
+    corr += (-0.00111 * s(mp - 2 * f) - 0.00057 * s(mp + 2 * f) + 0.00056 * e * s(2 * mp + m)
+             - 0.00042 * s(3 * mp) + 0.00042 * e * s(m + 2 * f) + 0.00038 * e * s(m - 2 * f)
+             - 0.00024 * e * s(2 * mp - m) - 0.00017 * s(om) - 0.00007 * s(mp + 2 * m)
+             + 0.00004 * s(2 * mp - 2 * f) + 0.00004 * s(3 * m) + 0.00003 * s(mp + m - 2 * f)
+             + 0.00003 * s(2 * mp + 2 * f) - 0.00003 * s(mp + m + 2 * f)
+             + 0.00003 * s(mp - m + 2 * f) - 0.00002 * s(mp - m - 2 * f)
+             - 0.00002 * s(3 * mp + m) + 0.00002 * s(4 * mp))
+    jde += corr
+    utc = datetime(2000, 1, 1, 12, tzinfo=timezone.utc) + timedelta(days=jde - 2451545.0, seconds=-69)
+    return utc.astimezone(MOSCOW_TZ)
+
+
+def _moon_events_around(dt: datetime) -> list[tuple[datetime, str]]:
+    """Новолуния ('new') и полнолуния ('full') примерно на ±3 месяца вокруг даты."""
+    year_frac = dt.year + (dt.timetuple().tm_yday - 1) / 365.25
+    kc = math.floor((year_frac - 2000) * 12.3685)
+    events = []
+    for k in range(kc - 3, kc + 5):
+        events.append((_phase_moment(k, False), "new"))
+        events.append((_phase_moment(k + 0.5, True), "full"))
+    events.sort(key=lambda x: x[0])
+    return events
+
+
+_MOON_NAMES = {
+    "new": "Новолуние — время загадывать намерения и начинать новое",
+    "full": "Полнолуние — пик лунной энергии, время завершений и благодарности",
+}
+
+
+def _moon_on(day) -> dict:
+    noon = datetime(day.year, day.month, day.day, 12, tzinfo=MOSCOW_TZ)
+    out = {}
+    for moment, kind in _moon_events_around(noon):
+        if moment.date() == day:
+            out.setdefault(day, []).append(("sky", f"{_MOON_NAMES[kind]}. Точный момент: {moment:%H:%M} МСК"))
+    return out
+
+
+def moon_status(now: datetime) -> str:
+    """Где сейчас Луна и какие ближайшие новолуния/полнолуния."""
+    events = _moon_events_around(now)
+    last_new = max((m for m, kind in events if kind == "new" and m <= now), default=None)
+    next_new = min((m for m, kind in events if kind == "new" and m > now), default=None)
+    upcoming = [(m, kind) for m, kind in events if m > now][:4]
+    if last_new is None or next_new is None:
+        return ""
+    age = (now - last_new).total_seconds() / 86400
+    frac = age / ((next_new - last_new).total_seconds() / 86400)
+    lit = round((1 - math.cos(2 * math.pi * frac)) / 2 * 100)
+    if frac < 0.03 or frac > 0.97:
+        state = "новолуние (Луны почти не видно)"
+    elif 0.47 <= frac <= 0.53:
+        state = "полнолуние"
+    elif frac < 0.5:
+        state = f"растущая Луна, освещено около {lit}%"
+    else:
+        state = f"убывающая Луна, освещено около {lit}%"
+    nxt = ", ".join(f"{'новолуние' if k == 'new' else 'полнолуние'} {m:%d.%m в %H:%M} МСК" for m, k in upcoming)
+    return f"Луна сейчас: {state}, примерно {int(age) + 1}-й лунный день. Ближайшее: {nxt}"
+
+
 # ─── Сбор праздников на конкретную дату ────────────────────────
 _ORDER = {"main": 0, "sky": 1, "fun": 2}
 
@@ -200,6 +281,7 @@ def holidays_on(day) -> list[tuple[str, str]]:
     items = list(_FIXED.get((day.month, day.day), []))
     items += _movable_church(day.year).get(day, [])
     items += _seasons(day.year).get(day, [])
+    items += _moon_on(day).get(day, [])
     items.sort(key=lambda x: _ORDER[x[0]])
     return items
 
@@ -215,6 +297,8 @@ _TRIGGERS = (
     "какое сегодня число и", "знаменательн", "какие даты",
 )
 
+_MOON_TRIGGERS = ("луна", "луну", "луны", "луне", "луной", "лунн", "полнолуни", "новолуни")
+
 _MONTHS = {
     "января": 1, "февраля": 2, "марта": 3, "апреля": 4, "мая": 5, "июня": 6,
     "июля": 7, "августа": 8, "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12,
@@ -223,14 +307,21 @@ _DATE_RE = re.compile(r"\b(\d{1,2})\s+(" + "|".join(_MONTHS) + r")\b")
 
 
 def holidays_context(text: str, now: datetime | None = None) -> str | None:
-    """Если спрашивают про праздники — возвращает подсказку для Совы, иначе None."""
+    """Если спрашивают про праздники или Луну — возвращает подсказку для Совы, иначе None."""
     low = text.lower()
     asked_date = _DATE_RE.search(low)
-    if not (any(t in low for t in _TRIGGERS) or (asked_date and "день" in low)):
+    asked_holidays = any(t in low for t in _TRIGGERS) or bool(asked_date and "день" in low)
+    asked_moon = any(t in low for t in _MOON_TRIGGERS)
+    if not (asked_holidays or asked_moon):
         return None
 
     now = now or datetime.now(MOSCOW_TZ)
     today = now.date()
+
+    # Спрашивают только про Луну — отдаём лунный календарь
+    if asked_moon and not asked_holidays:
+        return "[ЛУННЫЙ КАЛЕНДАРЬ (используй только его, ничего не придумывай): " + moon_status(now) + "]"
+
     parts = []
 
     today_items = holidays_on(today)
@@ -262,5 +353,7 @@ def holidays_context(text: str, now: datetime | None = None) -> str | None:
             upcoming.append(f"{d:%d.%m} — {_fmt(items)}")
     if upcoming:
         parts.append("Ближайшие дни: " + " | ".join(upcoming))
+
+    parts.append(moon_status(now))
 
     return "[КАЛЕНДАРЬ ПРАЗДНИКОВ (используй только его, ничего не придумывай): " + ". ".join(parts) + "]"
