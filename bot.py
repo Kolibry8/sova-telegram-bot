@@ -22,6 +22,7 @@ from telegram.ext import (
 )
 
 from config import TELEGRAM_TOKEN, GEMINI_API_KEY, BOT_NAME, SYSTEM_PROMPT
+from holidays import holidays_context
 
 
 # ─── Веб-сервер для Render (чтобы не засыпал) ─────────────────
@@ -322,6 +323,12 @@ async def ask_ai(user_message: str, history: list[dict], sender_name: str) -> st
 
         # Добавляем информацию о текущем времени к сообщению
         full_message = f"[Сейчас: {weekday}, {date_str}, {time_str} МСК] [{sender_name}]: {user_message}"
+
+        # Если спрашивают про праздники — подсказываем готовый календарь (чтобы не путала даты)
+        holidays_hint = holidays_context(user_message, now)
+        if holidays_hint:
+            full_message = f"{holidays_hint}\n{full_message}"
+            logger.info("Добавлен календарь праздников для вопроса от %s", sender_name)
         contents.append({"role": "user", "parts": [{"text": full_message}]})
 
         # Запускаем с таймаутом 45 секунд
