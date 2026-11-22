@@ -105,6 +105,7 @@ _FIXED_RAW = [
     (10, 9, "fun", "Всемирный день почты"),
     (11, 13, "fun", "Всемирный день доброты"),
     (11, 21, "fun", "Всемирный день приветствий (скажите «привет» десяти людям)"),
+    (11, 22, "fun", "День сыновей (неофициальный семейный праздник)"),
 ]
 
 _FIXED: dict[tuple[int, int], list[tuple[str, str]]] = {}
@@ -320,12 +321,12 @@ def holidays_context(text: str, now: datetime | None = None) -> str | None:
 
     # Спрашивают только про Луну — отдаём лунный календарь
     if asked_moon and not asked_holidays:
-        return "[ЛУННЫЙ КАЛЕНДАРЬ (используй только его, ничего не придумывай): " + moon_status(now) + "]"
+        return "[ЛУННЫЙ КАЛЕНДАРЬ (проверенный список — в приоритете; дополнять можно только тем, в чём уверена): " + moon_status(now) + "]"
 
     parts = []
 
     today_items = holidays_on(today)
-    parts.append(f"Сегодня ({today:%d.%m}): " + (_fmt(today_items) if today_items else "особых праздников нет"))
+    parts.append(f"Сегодня ({today:%d.%m}): " + (_fmt(today_items) if today_items else "в календаре отметок нет"))
 
     tomorrow = today + timedelta(days=1)
     tm_items = holidays_on(tomorrow)
@@ -340,7 +341,7 @@ def holidays_context(text: str, now: datetime | None = None) -> str | None:
             if asked < today:
                 asked = datetime(today.year + 1, month, day).date()
             items = holidays_on(asked)
-            parts.append(f"{asked:%d.%m}: " + (_fmt(items) if items else "особых праздников нет"))
+            parts.append(f"{asked:%d.%m}: " + (_fmt(items) if items else "в календаре отметок нет"))
         except ValueError:
             pass
 
@@ -356,4 +357,4 @@ def holidays_context(text: str, now: datetime | None = None) -> str | None:
 
     parts.append(moon_status(now))
 
-    return "[КАЛЕНДАРЬ ПРАЗДНИКОВ (используй только его, ничего не придумывай): " + ". ".join(parts) + "]"
+    return "[КАЛЕНДАРЬ ПРАЗДНИКОВ (проверенный список — в приоритете; дополнять можно только тем, в чём уверена): " + ". ".join(parts) + "]"
